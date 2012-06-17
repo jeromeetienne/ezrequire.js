@@ -1,0 +1,19 @@
+<!doctype html>
+<head>
+	<script src="../ezrequire.js"></script>
+</head>
+<body><script>
+	EzRequire.urlModifiers.push(function(url){
+		return url.replace(/^prout\//, '/examples');
+	})
+	EzRequire.urlModifiers.push(function(url){
+		if( url.match(/\.js$/) )	return url;
+		return url+".js";
+	})
+	var require	= EzRequire.require;
+
+	console.log("begining of index.html")
+	require('name', ['prout/dep0', 'dep1'], function(){
+		console.log("index.js loaded")
+	})
+</script></body>

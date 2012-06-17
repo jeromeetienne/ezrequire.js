@@ -1,0 +1,1 @@
+console.log("Begining of dep0.js")

@@ -35,22 +35,18 @@ EzRequire._checkAllDefines	= function(){
 		for(var i = 0; i < define.deps.length; i++){
 			var depUrl	= define.depUrls[i];
 			var depStatus	= EzRequire._depStatuses[depUrl];
-			console.log("checkAllDefines dep", depUrl, depStatus)
+			console.log("checkAllDefines deps depUrl", depUrl, "depStatus", depStatus)
 			if( depStatus !== 'ready' )	return;
 		}
-		console.log("checkAllDefines depStatus", EzRequire._depStatuses[define.name], define.name)
-		console.log("checkAllDefines depStatus", JSON.stringify(EzRequire._depStatuses))
-
-		console.assert( EzRequire._depStatuses[define.name] === "loaded" );
+		console.log("checkAllDefines define depStatus", EzRequire._depStatuses[define.name], define.name)
+		console.log("checkAllDefines depStatuses", JSON.stringify(EzRequire._depStatuses))
 
 		define.callback();
 
 		EzRequire._depStatuses[define.name] = "ready";
 		delete EzRequire._defines[name];
-
-		setTimeout(function(){
-			EzRequire._checkAllDefines();
-		}, 0)
+		// launch a ._checkAllDefines() 
+		setTimeout(EzRequire._checkAllDefines, 0)
 	});
 	console.log("checkAllDefines *********** END")
 };
@@ -66,16 +62,20 @@ EzRequire.define = function(name, deps, callback){
 		var script	= scripts[scripts.length-1];
 		name	= script.src;
 	}
-		
+	if( deps instanceof Array === false ){
+		callback	= deps;
+		deps		= [];		
+	}
 	// sanity check - variable types is strict
 	console.assert(deps instanceof Array);
 	console.assert(typeof(name) === 'string');
 	console.assert(typeof(callback) === 'function');
 	
 	console.log("******** DEFINE Begin", name, deps)
+	console.log("name", name, "deps", deps, "callback", callback)
 
 	////////////////////////////////////////////////////////////////////////
-	// build scriptUrls and apply urlModifiers
+	// apply urlModifiers to deps
 	var newDeps	= [];
 	for(var i = 0; i < deps.length; i++){
 		var newDep	= deps[i];
@@ -87,7 +87,8 @@ EzRequire.define = function(name, deps, callback){
 	}
 	deps	= newDeps;
 	
-	
+	////////////////////////////////////////////////////////////////////////
+	// compute depUrls
 	var depUrls	= [];
 	var baseUrl	= location.href.replace(/[^/]*$/, '')
 	deps.forEach(function(dep){
@@ -106,42 +107,25 @@ EzRequire.define = function(name, deps, callback){
 	};
 
 	console.assert( EzRequire._depStatuses[name] === undefined || EzRequire._depStatuses[name] === "loading");
-	if( name.match(/^require-/) ){
-		EzRequire._depStatuses[name]	= "loaded"
-	}else{
-		EzRequire._depStatuses[name]	= "loading"
-	}
+	EzRequire._depStatuses[name]	= name.match(/^void:\/\/require-/) ? "loaded" : "loading";
+
 //////////////////////////////////////////////////////////////////////////////////
 
 	deps.forEach(function(dep, depIdx){
-		if( dep.match(/\.js$/) ){
-			var depUrl	= depUrls[depIdx];
-			if( EzRequire._depStatuses[depUrl] !== undefined )	return;
-			EzRequire._depStatuses[depUrl]	= 'loading';
-			EzRequire._loadScript(depUrl, function(){
-				EzRequire._depStatuses[depUrl]	= 'ready';
-	console.log("blablablabla", JSON.stringify(EzRequire._depStatuses), depUrl)
-				EzRequire._checkAllDefines();
-			}, function(){
-				EzRequire._depStatuses[depUrl]	= 'error';
-				console.warn('cant load '+depUrl)
-			})
-		}else{
-			var depUrl	= depUrls[depIdx];
-			if( EzRequire._depStatuses[depUrl] !== undefined )	return;
-			EzRequire._depStatuses[depUrl]	= 'loading';
-			EzRequire._loadScript(depUrl, function(){
-				EzRequire._depStatuses[depUrl]	= 'loaded';
-	console.log("blablablabla", JSON.stringify(EzRequire._depStatuses), depUrl)
-				EzRequire._checkAllDefines();
-			}, function(){
-				EzRequire._depStatuses[depUrl]	= 'error';
-				console.warn('cant load '+depUrl)
-			})
-		}		
+		var depUrl	= depUrls[depIdx];
+		if( EzRequire._depStatuses[depUrl] !== undefined )	return;
+		EzRequire._depStatuses[depUrl]	= 'loading';
+		EzRequire._loadScript(depUrl, function(){
+			EzRequire._depStatuses[depUrl]	= dep.match(/\.js$/) ? 'ready' : 'loaded';
+			EzRequire._checkAllDefines();
+		}, function(){
+			EzRequire._depStatuses[depUrl]	= 'error';
+			console.warn('cant load '+depUrl)
+		})
 	});
 
-	EzRequire._checkAllDefines();
+	// launch a ._checkAllDefines() 
+	setTimeout(EzRequire._checkAllDefines, 0)
 
 	console.log("******** DEFINE End ", name)
 }
@@ -151,7 +135,7 @@ EzRequire._requireModuleId	= 0
  * same as define() - the moduleId is automatically generater
 */
 EzRequire.require	= function(deps, callback){
-	var moduleId	= "require-"+(EzRequire._requireModuleId++);
+	var moduleId	= "void://require-"+(EzRequire._requireModuleId++);
 	return EzRequire.define(moduleId, deps, callback)
 }
 

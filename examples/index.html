@@ -4,16 +4,13 @@
 </head>
 <body><script>
 	EzRequire.urlModifiers.push(function(url){
-		return url.replace(/^prout\//, '/examples');
+		return url.replace(/^prout\//, '/examples/');
 	})
-	EzRequire.urlModifiers.push(function(url){
-		if( url.match(/\.js$/) )	return url;
-		return url+".js";
-	})
+	var define	= EzRequire.define;
 	var require	= EzRequire.require;
 
-	console.log("begining of index.html")
-	require('name', ['prout/dep0', 'dep1'], function(){
-		console.log("index.js loaded")
-	})
+	console.log("begining of index.html", location.href)
+	require(['dep1'], function(){
+		console.log("SUCCESS index.js loaded")
+	});
 </script></body>

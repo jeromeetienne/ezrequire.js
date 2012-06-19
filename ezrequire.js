@@ -2,8 +2,8 @@ var EzRequire	= {};
 
 EzRequire.urlModifiers	= [];
 
-EzRequire._loadedUrls	= [];
-EzRequire._scripts	= {};
+EzRequire._depStatuses	= {};
+EzRequire._defines	= {};
 
 /**
  * Load a script
@@ -15,7 +15,10 @@ EzRequire._scripts	= {};
 EzRequire._loadScript	= function(scriptUrl, onLoad, onError){
 	console.log("loadScript(", scriptUrl,")")
 	var script	= document.createElement('script');
-	script.onload	= onLoad;
+	script.onload	= function(){
+		console.log("_loadScript(): loaded ", scriptUrl)
+		onLoad();
+	};
 	script.onerror	= onError	|| function(){
 		alert("Loading failed!");
 	}
@@ -24,77 +27,132 @@ EzRequire._loadScript	= function(scriptUrl, onLoad, onError){
 	return script;
 }
 
-EzRequire.checkAllDeps	= function(){
-	
-	for(var j = 0; j < scriptUrls.length; j++){
-			var scriptUrl	= scriptUrls[i];
-			var isLoaded	= loadedUrls.indexOf(scriptUrl) !== -1;
-			if( !isLoaded )	return false;
+EzRequire._checkAllDefines	= function(){
+	console.log("checkAllDefines *********** BEGIN")
+	Object.keys(EzRequire._defines).forEach(function(name){
+		var define	= EzRequire._defines[name];
+		console.log("checkAllDefines check define", name)
+		for(var i = 0; i < define.deps.length; i++){
+			var depUrl	= define.depUrls[i];
+			var depStatus	= EzRequire._depStatuses[depUrl];
+			console.log("checkAllDefines dep", depUrl, depStatus)
+			if( depStatus !== 'ready' )	return;
 		}
-		return true;
-	}
-}
+		console.log("checkAllDefines depStatus", EzRequire._depStatuses[define.name], define.name)
+		console.log("checkAllDefines depStatus", JSON.stringify(EzRequire._depStatuses))
+
+		console.assert( EzRequire._depStatuses[define.name] === "loaded" );
+
+		define.callback();
+
+		EzRequire._depStatuses[define.name] = "ready";
+		delete EzRequire._defines[name];
+
+		setTimeout(function(){
+			EzRequire._checkAllDefines();
+		}, 0)
+	});
+	console.log("checkAllDefines *********** END")
+};
 
 
-EzRequire.require = function(name, deps, callback){
+EzRequire.define = function(name, deps, callback){
 	// handle polymorphism
-	
+	if( typeof(name) !== 'string' ){
+		callback	= deps;
+		deps		= name;
+		
+		var scripts	= document.querySelectorAll('head script')
+		var script	= scripts[scripts.length-1];
+		name	= script.src;
+	}
+		
 	// sanity check - variable types is strict
 	console.assert(deps instanceof Array);
 	console.assert(typeof(name) === 'string');
 	console.assert(typeof(callback) === 'function');
 	
-	console.log("REQUIRE ", name, "***********")
-	console.log("deps", deps)
-	
-	var loadedUrls	= EzRequire._loadedUrls;
-	
+	console.log("******** DEFINE Begin", name, deps)
+
+	////////////////////////////////////////////////////////////////////////
 	// build scriptUrls and apply urlModifiers
-	var scriptUrls	= [];
+	var newDeps	= [];
 	for(var i = 0; i < deps.length; i++){
-		var scriptUrl	= deps[i];
+		var newDep	= deps[i];
 		for(var j = 0; j < EzRequire.urlModifiers.length; j++){
 			var urlModifier	= EzRequire.urlModifiers[j];
-			scriptUrl	= urlModifier(scriptUrl);
-			console.log("post modif", scriptUrl, j)
+			newDep	= urlModifier(newDep);
 		}
-		scriptUrls.push(scriptUrl)
+		newDeps.push(newDep)
 	}
+	deps	= newDeps;
 	
-	console.assert(EzRequire._scripts[name] === undefined)
-	EzRequire._scripts[name]	= {
-		scriptUrls	: scriptsUrl,
+	
+	var depUrls	= [];
+	var baseUrl	= location.href.replace(/[^/]*$/, '')
+	deps.forEach(function(dep){
+		var depUrl	= dep + (dep.match(/\.js$/) ? '' : '.js');
+		depUrl		= baseUrl + depUrl;
+		depUrls.push(depUrl)
+	});
+
+//////////////////////////////////////////////////////////////////////////////////
+	console.assert(EzRequire._defines[name] === undefined)
+	EzRequire._defines[name]	= {
+		name		: name,
+		deps		: deps,
+		depUrls		: depUrls,
 		callback	: callback
 	};
-	
-	var allDepsLoaded	= function(){
-		for(var i = 0; i < scriptUrls.length; i++){
-			var scriptUrl	= scriptUrls[i];
-			var isLoaded	= loadedUrls.indexOf(scriptUrl) !== -1;
-			if( !isLoaded )	return false;
-		}
-		return true;
-	}
-	
-	for(var i = 0; i < scriptUrls.length; i++){
-		var scriptUrl	= scriptUrls[i];
-		var isLoaded	= loadedUrls.indexOf(scriptUrl) !== -1;
-		if( isLoaded )	continue;
-		EzRequire._loadScript(scriptUrl, function(){
-			console.log("loaded", scriptUrl)
-			loadedUrls.push(scriptUrl)
-			if( allDepsLoaded() ) callback();
-		})
-	}
 
-	if( allDepsLoaded() ) callback();
+	console.assert( EzRequire._depStatuses[name] === undefined || EzRequire._depStatuses[name] === "loading");
+	if( name.match(/^require-/) ){
+		EzRequire._depStatuses[name]	= "loaded"
+	}else{
+		EzRequire._depStatuses[name]	= "loading"
+	}
+//////////////////////////////////////////////////////////////////////////////////
 
-	console.log("END", name, "***********")
+	deps.forEach(function(dep, depIdx){
+		if( dep.match(/\.js$/) ){
+			var depUrl	= depUrls[depIdx];
+			if( EzRequire._depStatuses[depUrl] !== undefined )	return;
+			EzRequire._depStatuses[depUrl]	= 'loading';
+			EzRequire._loadScript(depUrl, function(){
+				EzRequire._depStatuses[depUrl]	= 'ready';
+	console.log("blablablabla", JSON.stringify(EzRequire._depStatuses), depUrl)
+				EzRequire._checkAllDefines();
+			}, function(){
+				EzRequire._depStatuses[depUrl]	= 'error';
+				console.warn('cant load '+depUrl)
+			})
+		}else{
+			var depUrl	= depUrls[depIdx];
+			if( EzRequire._depStatuses[depUrl] !== undefined )	return;
+			EzRequire._depStatuses[depUrl]	= 'loading';
+			EzRequire._loadScript(depUrl, function(){
+				EzRequire._depStatuses[depUrl]	= 'loaded';
+	console.log("blablablabla", JSON.stringify(EzRequire._depStatuses), depUrl)
+				EzRequire._checkAllDefines();
+			}, function(){
+				EzRequire._depStatuses[depUrl]	= 'error';
+				console.warn('cant load '+depUrl)
+			})
+		}		
+	});
+
+	EzRequire._checkAllDefines();
+
+	console.log("******** DEFINE End ", name)
 }
 
+EzRequire._requireModuleId	= 0
 /**
- * exactly the same as require()
+ * same as define() - the moduleId is automatically generater
 */
-EzRequire.define = EzRequire.require;
+EzRequire.require	= function(deps, callback){
+	var moduleId	= "require-"+(EzRequire._requireModuleId++);
+	return EzRequire.define(moduleId, deps, callback)
+}
 
 

@@ -3,14 +3,8 @@
 	<script src="../ezrequire.js"></script>
 </head>
 <body><script>
-	EzRequire.urlModifiers.push(function(url){
-		return url.replace(/^prout\//, '/examples/');
-	})
-	var define	= EzRequire.define;
-	var require	= EzRequire.require;
-
 	console.log("begining of index.html", location.href)
-	require(['dep0.js', 'dep1'], function(){
+	require(['dep2', 'dep0.js'], function(){
 		console.log("SUCCESS index.js loaded")
 	});
 </script></body>
